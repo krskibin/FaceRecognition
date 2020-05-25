@@ -6,8 +6,8 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <org.opencv.android.JavaCameraView
-        android:id="@+id/javaCameraView"
+    <com.example.facerecognition.JavaCameraView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"></org.opencv.android.JavaCameraView>
+        android:layout_height="match_parent"
+        android:id="@+id/java_camera_view" />
 </RelativeLayout>

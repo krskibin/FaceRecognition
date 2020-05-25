@@ -1,15 +1,21 @@
 package com.example.facerecognition;
 
 import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.view.GestureDetector;
+import android.view.MotionEvent;
+import android.view.SurfaceView;
+import android.view.View;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.CameraBridgeViewBase;
-import org.opencv.android.JavaCameraView;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
 import org.opencv.core.Point;
@@ -26,18 +32,43 @@ import java.io.InputStream;
 
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
-    JavaCameraView javaCameraView;
+    CameraBridgeViewBase mCameraView;
     File cascadeFile;
     CascadeClassifier faceDetector;
+    private SharedPreferences prefs;
 
-    private Mat mRGBa, mGrey;
+    private Mat mRGBa, mGray;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        prefs = PreferenceManager.getDefaultSharedPreferences(this);
 
-        javaCameraView = findViewById(R.id.javaCameraView);
+        mCameraView = findViewById(R.id.java_camera_view);
+        mCameraView.setCameraIndex(prefs.getInt("mCameraIndex", CameraBridgeViewBase.CAMERA_ID_FRONT));
+        mCameraView.setVisibility(SurfaceView.VISIBLE);
+        mCameraView.setCvCameraViewListener(this);
+
+        final GestureDetector mGestureDetector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                // Flip camera
+                mCameraView.flipCamera();
+                return true;
+            }
+        });
+
+        mCameraView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                return mGestureDetector.onTouchEvent(event);
+            }
+        });
 
         // check if OpenCV is loaded
         if (!OpenCVLoader.initDebug()) {
@@ -50,26 +81,79 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                 e.printStackTrace();
             }
         }
-
-        javaCameraView.setCvCameraViewListener(this);
     }
 
     @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (mCameraView != null)
+            mCameraView.disableView();
+    }
+
     public void onCameraViewStarted(int width, int height) {
+        mGray = new Mat();
         mRGBa = new Mat();
-        mGrey = new Mat();
     }
 
-    @Override
     public void onCameraViewStopped() {
+        mGray.release();
         mRGBa.release();
-        mGrey.release();
     }
+
+
 
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-        mRGBa = inputFrame.rgba();
-        mGrey = inputFrame.gray();
+        Mat mGrayTmp = inputFrame.gray();
+        Mat mRgbaTmp = inputFrame.rgba();
+
+        // Flip image to get mirror effect
+        int orientation = mCameraView.getScreenOrientation();
+        if (mCameraView.isEmulator()) // Treat emulators as a special case
+            Core.flip(mRgbaTmp, mRgbaTmp, 1); // Flip along y-axis
+        else {
+            switch (orientation) { // RGB image
+                case ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:
+                case ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT:
+                    if (mCameraView.mCameraIndex == CameraBridgeViewBase.CAMERA_ID_FRONT)
+                        Core.flip(mRgbaTmp, mRgbaTmp, 0); // Flip along x-axis
+                    else
+                        Core.flip(mRgbaTmp, mRgbaTmp, -1); // Flip along both axis
+                    break;
+                case ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE:
+                case ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE:
+                    if (mCameraView.mCameraIndex == CameraBridgeViewBase.CAMERA_ID_FRONT)
+                        Core.flip(mRgbaTmp, mRgbaTmp, 1); // Flip along y-axis
+                    break;
+            }
+            switch (orientation) { // Grayscale image
+                case ActivityInfo.SCREEN_ORIENTATION_PORTRAIT:
+                    Core.transpose(mGrayTmp, mGrayTmp); // Rotate image
+                    if (mCameraView.mCameraIndex == CameraBridgeViewBase.CAMERA_ID_FRONT)
+                        Core.flip(mGrayTmp, mGrayTmp, -1); // Flip along both axis
+                    else
+                        Core.flip(mGrayTmp, mGrayTmp, 1); // Flip along y-axis
+                    break;
+
+                case ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT:
+                    Core.transpose(mGrayTmp, mGrayTmp); // Rotate image
+                    if (mCameraView.mCameraIndex == CameraBridgeViewBase.CAMERA_ID_BACK)
+                        Core.flip(mGrayTmp, mGrayTmp, 0); // Flip along x-axis
+                    break;
+                case ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE:
+                    if (mCameraView.mCameraIndex == CameraBridgeViewBase.CAMERA_ID_FRONT)
+                        Core.flip(mGrayTmp, mGrayTmp, 1); // Flip along y-axis
+                    break;
+                case ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE:
+                    Core.flip(mGrayTmp, mGrayTmp, 0); // Flip along x-axis
+                    if (mCameraView.mCameraIndex == CameraBridgeViewBase.CAMERA_ID_BACK)
+                        Core.flip(mGrayTmp, mGrayTmp, 1); // Flip along y-axis
+                    break;
+            }
+        }
+
+        mRGBa = mRgbaTmp;
+        mGray = mGrayTmp;
 
         // face detecting code
         MatOfRect faceDetections = new MatOfRect();
@@ -82,6 +166,21 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         return mRGBa;
     }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (!OpenCVLoader.initDebug()) {
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_3, this, baseCallback);
+        } else {
+            try {
+                baseCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+            } catch (IOException e) {
+
+            }
+        }
+    }
+
 
     private BaseLoaderCallback baseCallback = new BaseLoaderCallback(this) {
         @Override
@@ -126,7 +225,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
                     cascadeDirectory.delete();
 
                     // Enable java camera view
-                    javaCameraView.enableView();
+                    mCameraView.enableView();
                 }
                 break;
 
@@ -136,4 +235,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             }
         }
     };
+
+
+
 }
