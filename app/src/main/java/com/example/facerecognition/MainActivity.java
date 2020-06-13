@@ -30,6 +30,11 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+/**
+ * Main Activity class that handle the main activity layout, also
+ * implements CameraBridgeViewBase.CVCameraViewListener2 make usage of
+ * openCV camera view
+ */
 public class MainActivity extends AppCompatActivity implements CameraBridgeViewBase.CvCameraViewListener2 {
 
     CameraBridgeViewBase mCameraView;
@@ -39,6 +44,12 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
     private Mat mRGBa, mGray;
 
+    /**
+     * Overridden onCreate method that handle app onCreate state, which
+     * means that this method is called immediately after running the app.
+     * It is mainly used to create the app state.
+      * @param savedInstanceState
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -83,6 +94,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
     }
 
+    /**
+     * onDestroy method that handles on destroy activity state.
+     * It is responsible for disabling the mCameraView
+     */
     @Override
     public void onDestroy() {
         super.onDestroy();
@@ -90,18 +105,32 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             mCameraView.disableView();
     }
 
+    /**
+     * onCameraViewStarted method that sets mGray and mRGBa state
+     * after launching the Camera
+     * @param width -  the width of the frames that will be delivered
+     * @param height - the height of the frames that will be delivered
+     */
     public void onCameraViewStarted(int width, int height) {
         mGray = new Mat();
         mRGBa = new Mat();
     }
 
+    /**
+     * onCameraViewStopped is responsible for releasing the mGray and mRGBa
+     * global state when application is on hold.
+     */
     public void onCameraViewStopped() {
         mGray.release();
         mRGBa.release();
     }
 
-
-
+    /**
+     * Method that takes every camera frame and
+     * sets its orientation, detects face, and draws the rectangle on them.
+     * @param inputFrame
+     * @return
+     */
     @Override
     public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
         Mat mGrayTmp = inputFrame.gray();
@@ -167,6 +196,11 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         return mRGBa;
     }
 
+    /**
+     * onResume method that handles onResume devices state
+     * after getting back to the application
+     * also checks if OpenCVLoader works
+     */
     @Override
     public void onResume() {
         super.onResume();
@@ -181,8 +215,20 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
     }
 
-
+    /**
+     * BaseLoaderCallback is a baseCallback instance that takes app context
+     * and handle the OpenCV connected state
+     */
     private BaseLoaderCallback baseCallback = new BaseLoaderCallback(this) {
+
+        /**
+         * onManagerConnected method that takes OpenCV status
+         * and if Open CV is loaded, methods opens the file stream
+         * to load haarcascade_frontalface algorythm and then enables
+         * the OpenCV Camera state
+         * @param status
+         * @throws IOException
+         */
         @Override
         public void onManagerConnected(int status) throws IOException {
             switch (status) {
